@@ -207,3 +207,11 @@ marimo/_lsp/
 __marimo__/
 creditcard.csv
 
+
+
+history.db
+history.json
+model.pkl
+*.pkl
+
+

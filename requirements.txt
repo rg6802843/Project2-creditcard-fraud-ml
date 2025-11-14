@@ -1,5 +1,12 @@
-Flask
+flask
+joblib
 pandas
 numpy
 scikit-learn
-joblib
+imbalanced-learn
+reportlab        # optional for PDF
+xgboost          # optional if you want xgb models
+shap             # optional for SHAP explanations
+sqlalchemy       # optional, sqlite3 used builtin
+matplotlib 
+seaborn

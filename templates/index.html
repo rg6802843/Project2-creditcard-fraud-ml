@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Fraud Detector — Neon Dashboard</title>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#06070a;
+      --glass: rgba(255,255,255,0.03);
+      --glass-border: rgba(255,255,255,0.06);
+      --accent1:#6ee7ff;
+      --accent2:#8a2be2;
+      --muted: rgba(230,246,255,0.6);
+      --text:#eaf6ff;
+    }
+    html,body{height:100%;margin:0;background:
+      radial-gradient(1200px 600px at 10% 10%, rgba(106,89,255,0.06), transparent),
+      radial-gradient(1000px 400px at 90% 90%, rgba(110,231,255,0.03), transparent),
+      var(--bg); color:var(--text); font-family:Inter,system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+
+    .container{max-width:1150px; margin:28px auto; padding:20px; display:grid; grid-template-columns: 1fr 420px; gap:20px; align-items:start;}
+
+    header{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; grid-column:1/-1;}
+    .brand {display:flex; gap:12px; align-items:center;}
+    .logo {width:56px; height:56px; border-radius:12px; background: linear-gradient(135deg, rgba(110,231,255,0.12), rgba(138,43,226,0.12)); display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--accent1); border:1px solid rgba(255,255,255,0.04); backdrop-filter: blur(6px);}
+    h1{margin:0; font-size:20px;}
+    p.lead{margin:0; color:var(--muted); font-size:13px;}
+
+    .card{background:var(--glass); border-radius:14px; padding:18px; border:1px solid var(--glass-border); box-shadow: 0 10px 40px rgba(3,6,20,0.6);}
+
+    .form-grid{display:grid; grid-template-columns: repeat(3, 1fr); gap:12px;}
+    label.small{display:block; font-size:12px; color:var(--muted); margin-bottom:6px;}
+    input, select {background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.04); color:var(--text); padding:10px 12px; border-radius:8px; outline:none; font-size:14px;}
+    input::placeholder{color:rgba(230,246,255,0.35);}
+
+    .controls{display:flex; gap:10px; margin-top:14px; align-items:center;}
+    .btn{padding:10px 14px; border-radius:10px; cursor:pointer; border:none; font-weight:600;}
+    .btn-accent{background:linear-gradient(90deg,var(--accent1),var(--accent2)); color:#001; box-shadow:0 6px 24px rgba(110,231,255,0.06);}
+    .btn-ghost{background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted);}
+
+    .result-area{display:flex; gap:18px; align-items:center; margin-top:18px;}
+    .gauge-wrap{width:220px; height:220px; display:flex; align-items:center; justify-content:center; position:relative;}
+    .gauge-card{width:220px; height:220px; border-radius:110px; display:flex; align-items:center; justify-content:center; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.04);}
+
+    .gauge-center{position:absolute; text-align:center; color:#fff;}
+    .gauge-center .big{font-size:24px; font-weight:800; letter-spacing:0.6px;}
+    .gauge-center .small{font-size:12px; color:var(--muted); margin-top:4px;}
+
+    .result-text{flex:1;}
+    .result-label{font-size:14px; color:var(--muted);}
+    .result-status{font-size:18px; font-weight:800; margin-top:6px;}
+
+    .right-col{display:flex; flex-direction:column; gap:14px;}
+    .history-list{max-height:420px; overflow:auto; padding:8px; display:flex; flex-direction:column; gap:8px;}
+    .history-item{display:flex; justify-content:space-between; gap:8px; padding:10px; border-radius:10px; background:linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03); font-size:13px;}
+    .tag-fraud{color:#ff6b6b; font-weight:700;}
+    .tag-ok{color:#33ffb2; font-weight:700;}
+
+    .small{font-size:12px; color:var(--muted); margin-top:8px;}
+
+    @media (max-width:980px){
+      .container{grid-template-columns: 1fr; padding:12px;}
+      .gauge-wrap{width:160px; height:160px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="logo">FD</div>
+        <div>
+          <h1>Fraud Detector</h1>
+          <p class="lead">Real-time credit card fraud predictions · Probability & history</p>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;align-items:center;">
+        <select id="modelSelect" style="background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:8px 10px;border-radius:8px;">
+          <option value="rf">Random Forest</option>
+          <option value="lr">Logistic Regression</option>
+          <option value="xgb">XGBoost</option>
+        </select>
+        <button id="downloadReport" class="btn btn-ghost">Download PDF</button>
+      </div>
+    </header>
+
+    <!-- LEFT: Form + result -->
+    <main>
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;font-size:16px;">Transaction Inputs</div>
+            <div class="small">Fill fields or use the autofill presets</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button id="autoLegit" class="btn btn-ghost">Auto Legit</button>
+            <button id="autoFraud" class="btn btn-ghost">Auto Fraud</button>
+            <button id="autoRandom" class="btn btn-ghost">Random</button>
+          </div>
+        </div>
+
+        <form id="fraudForm" style="margin-top:12px;">
+          <div style="display:grid; grid-template-columns: 150px 150px 1fr; gap:12px; margin-bottom:12px;">
+            <div>
+              <label class="small">Time</label>
+              <input id="Time" name="Time" type="number" step="any" placeholder="Time" required>
+            </div>
+
+            <div>
+              <label class="small">Amount</label>
+              <input id="Amount" name="Amount" type="number" step="any" placeholder="Amount" required>
+            </div>
+
+            <div>
+              <label class="small">Model</label>
+              <select id="modelChoice" style="width:100%;">
+                <option value="rf">Random Forest</option>
+                <option value="lr">Logistic Regression</option>
+                <option value="xgb">XGBoost</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid" id="dynamicInputsContainer"></div>
+
+          <div class="controls">
+            <button type="submit" class="btn btn-accent">Predict Now</button>
+            <button id="clearBtn" type="button" class="btn btn-ghost">Clear</button>
+            <div class="small" style="align-self:center;margin-left:6px;">API key: <strong style="color:#9be7ff">devkey</strong></div>
+          </div>
+        </form>
+
+        <div class="result-area">
+          <div class="gauge-wrap">
+            <div class="gauge-card">
+              <canvas id="gaugeCanvas" width="220" height="220"></canvas>
+            </div>
+            <div class="gauge-center">
+              <div class="big" id="gaugePercent">0%</div>
+              <div class="small" id="gaugeLabel">Confidence</div>
+            </div>
+          </div>
+
+          <div class="result-text">
+            <div class="result-label">Prediction</div>
+            <div id="predictionStatus" class="result-status">—</div>
+            <div id="explainText" class="small" style="margin-top:8px;color:var(--muted)"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: History + quick stats -->
+    <aside class="right-col">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div><strong>Recent Predictions</strong><div class="small">Latest server-side entries</div></div>
+          <button id="clearHistoryBtn" class="btn btn-ghost">Clear History</button>
+        </div>
+
+        <div class="history-list" id="historyList" style="margin-top:12px;"></div>
+        <div class="small" style="text-align:center; margin-top:8px; color:var(--muted);">Auto-refresh every 12s</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><strong>Quick Stats</strong><div class="small">Live analytics</div></div>
+        </div>
+        <div style="display:flex; gap:12px; margin-top:12px;">
+          <div style="flex:1; text-align:center;">
+            <div class="small">Total scanned</div>
+            <div id="statTotal" style="font-weight:800; font-size:20px;">0</div>
+          </div>
+          <div style="flex:1; text-align:center;">
+            <div class="small">Fraud rate</div>
+            <div id="statFraud" style="font-weight:800; font-size:20px; color:#ff7b7b;">0%</div>
+          </div>
+          <div style="flex:1; text-align:center;">
+            <div class="small">Avg amount</div>
+            <div id="statAmt" style="font-weight:800; font-size:20px;">0</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // FEATURES injected from Flask
+    const FEATURES = {{ keys|tojson|safe }};
+
+    // Build V1..V28 inputs
+    (function buildInputs() {
+      const container = document.getElementById("dynamicInputsContainer");
+      for (let k of FEATURES) {
+        if (k === "Time" || k === "Amount") continue;
+        const div = document.createElement("div");
+        div.innerHTML = `<label class="small">${k}</label><input id="${k}" name="${k}" type="number" step="any" placeholder="${k}">`;
+        container.appendChild(div);
+      }
+    })();
+
+    // presets
+    const LEGIT_VALUES = {};
+    const FRAUD_VALUES = {};
+    for (let k of FEATURES) {
+      if (k === "Time") { LEGIT_VALUES[k]=45; FRAUD_VALUES[k]=10000; continue; }
+      if (k === "Amount") { LEGIT_VALUES[k]=20; FRAUD_VALUES[k]=1200; continue; }
+      LEGIT_VALUES[k] = (Math.random()*0.6 - 0.1).toFixed(3);
+      FRAUD_VALUES[k] = (Math.random()*-2.0 - 0.5).toFixed(3);
+    }
+
+    function genRandom() {
+      const out = {};
+      for (let k of FEATURES) {
+        if (k === "Time") out[k] = Math.floor(Math.random()*10000);
+        else if (k === "Amount") out[k] = Number((Math.random()*1500).toFixed(2));
+        else out[k] = (Math.random()*3 - 1.5).toFixed(3);
+      }
+      return out;
+    }
+
+    function autofill(obj) {
+      for (let k in obj) {
+        const el = document.getElementById(k);
+        if (el) el.value = obj[k];
+      }
+    }
+
+    document.getElementById("autoLegit").addEventListener("click", () => { autofill(LEGIT_VALUES); document.getElementById("Time").focus(); });
+    document.getElementById("autoFraud").addEventListener("click", () => { autofill(FRAUD_VALUES); document.getElementById("Time").focus(); });
+    document.getElementById("autoRandom").addEventListener("click", () => { autofill(genRandom()); document.getElementById("Time").focus(); });
+
+    // attach enter navigation
+    function getAllInputs() { return FEATURES.map(k => document.getElementById(k)); }
+    function attachEnterNav() {
+      const inputs = getAllInputs();
+      inputs.forEach((input, idx) => {
+        if (!input) return;
+        input.tabIndex = idx + 1;
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const next = inputs[idx+1];
+            if (next) next.focus();
+            else document.querySelector(".btn-accent").focus();
+          }
+        });
+      });
+    }
+
+    // gauge (Chart.js)
+    let gaugeChart = null;
+    function initGauge() {
+      const ctx = document.getElementById("gaugeCanvas").getContext("2d");
+      gaugeChart = new Chart(ctx, {
+        type: "doughnut",
+        data: { labels: ["Fraud","Safe"], datasets: [{ data: [0,100], backgroundColor: ["#ff6b6b", "rgba(255,255,255,0.06)"], borderWidth: 0 }]},
+        options: { cutout: "75%", rotation: -90, circumference: 180, plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 600 } }
+      });
+    }
+    function setGauge(percent) {
+      const p = Math.max(0, Math.min(100, percent));
+      gaugeChart.data.datasets[0].data = [p, 100-p];
+      gaugeChart.update();
+      document.getElementById("gaugePercent").textContent = p.toFixed(1) + "%";
+      document.getElementById("gaugeLabel").textContent = p >= 50 ? "High risk" : "Low risk";
+    }
+
+    // predict
+    async function predict(payload) {
+      const resp = await fetch("/predict_api", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(payload)
+      });
+      return await resp.json();
+    }
+
+    function buildPayload() {
+      const out = {};
+      for (let k of FEATURES) {
+        const el = document.getElementById(k);
+        out[k] = el ? parseFloat(el.value) || 0 : 0;
+      }
+      out.model_choice = document.getElementById("modelChoice").value || "rf";
+      return out;
+    }
+
+    // init after DOM ready
+    setTimeout(() => {
+      attachEnterNav();
+      initGauge();
+      setGauge(0);
+
+      // form submit
+      document.getElementById("fraudForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = buildPayload();
+        const result = await predict(payload);
+        if (result.error) { alert("Error: "+result.error); return; }
+        document.getElementById("predictionStatus").textContent = result.Prediction;
+        document.getElementById("predictionStatus").style.color = result.raw_prediction === 1 ? "#ff7b7b" : "#7ef5c9";
+        document.getElementById("explainText").textContent = `Model: ${result.model_used} · prob: ${(result.probability*100).toFixed(2)}%`;
+        setGauge(result.probability*100);
+        await loadHistory();
+        await loadAdminStats();
+      });
+
+      // clear
+      document.getElementById("clearBtn").addEventListener("click", () => {
+        for (let k of FEATURES) { const el = document.getElementById(k); if (el) el.value = ""; }
+        setGauge(0);
+        document.getElementById("predictionStatus").textContent = "—";
+        document.getElementById("explainText").textContent = "";
+        document.getElementById("Time").focus();
+      });
+
+      // download report
+      document.getElementById("downloadReport").addEventListener("click", async () => {
+        const payload = buildPayload();
+        const resp = await fetch("/download_report", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(payload) });
+        const j = await resp.json();
+        if (j.file_name) alert("Report created: " + j.file_name); else alert("Report failed: " + JSON.stringify(j));
+      });
+
+      // clear history
+      document.getElementById("clearHistoryBtn").addEventListener("click", async () => {
+        if (!confirm("Delete all history on server?")) return;
+        const r = await fetch("/clear_history", { method: "POST" });
+        const j = await r.json();
+        if (j && j.status === "success") { await loadHistory(); alert("History cleared"); }
+        else if (j && j.error) alert("Error: "+j.error);
+      });
+
+      // initial loads
+      loadHistory();
+      loadAdminStats();
+      setInterval(loadHistory, 12000);
+      setInterval(loadAdminStats, 15000);
+    }, 80);
+
+    // load history
+    async function loadHistory() {
+      try {
+        const res = await fetch("/history?api_key=devkey");
+        const arr = await res.json();
+        const list = document.getElementById("historyList");
+        list.innerHTML = "";
+        let total = 0, frauds = 0, sumAmt = 0;
+        for (let row of arr) {
+          total++;
+          frauds += (row.prediction === "FRAUD" ? 1 : 0);
+          sumAmt += (row.amount || 0);
+          const item = document.createElement("div");
+          item.className = "history-item";
+          item.innerHTML = `<div style="min-width:220px;">
+                              <div style="font-weight:700">${row.timestamp}</div>
+                              <div class="small" style="color:var(--muted)">${row.model}</div>
+                            </div>
+                            <div style="text-align:right;">
+                              <div style="font-weight:800">${(row.probability*100).toFixed(1)}%</div>
+                              <div class="${row.prediction==='FRAUD' ? 'tag-fraud' : 'tag-ok'}">${row.prediction}</div>
+                            </div>`;
+          list.appendChild(item);
+        }
+        document.getElementById("statTotal").textContent = total;
+        document.getElementById("statFraud").textContent = total ? ((frauds/total*100).toFixed(1) + "%") : "0%";
+        document.getElementById("statAmt").textContent = total ? (Math.round((sumAmt/total)*100)/100) : "0";
+      } catch (e) {
+        console.error("History load failed", e);
+      }
+    }
+
+    // admin stats
+    async function loadAdminStats() {
+      try {
+        const res = await fetch("/admin_stats?api_key=devkey");
+        const j = await res.json();
+        if (j.error) return;
+        document.getElementById("statTotal").textContent = j.total_scanned || 0;
+        document.getElementById("statFraud").textContent = ((j.fraud_rate || 0)*100).toFixed(1) + "%";
+        document.getElementById("statAmt").textContent = (Math.round((j.avg_amount||0)*100)/100);
+
+        // top features (simple text fallback if none)
+        // we are not drawing extra charts here to keep things light
+      } catch (e) {
+        console.error("Admin stats failed", e);
+      }
+    }
+  </script>
+</body>
+</html>
